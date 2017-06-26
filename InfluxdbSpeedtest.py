@@ -6,6 +6,7 @@ from influxdb import InfluxDBClient
 from influxdb.exceptions import InfluxDBClientError, InfluxDBServerError
 import speedtest
 import time
+import json
 
 class configManager():
 
@@ -43,6 +44,10 @@ class configManager():
         if test_server:
             self.test_server.append(test_server)
 
+        # Servers
+        self.serverlist =  json.loads(self.config['SERVERLIST'].get('servers'))
+
+
 
 class InfluxdbSpeedtest():
 
@@ -59,7 +64,7 @@ class InfluxdbSpeedtest():
             ssl=self.config.influx_ssl,
             verify_ssl=self.config.influx_verify_ssl
         )
-
+        self.serverlist = self.config.serverlist
         self.speedtest = None
         self.results = None
         self.setup_speedtest()
@@ -92,6 +97,39 @@ class InfluxdbSpeedtest():
 
         self.results = self.speedtest.results
 
+    def change_speedtest_server(self,server):
+
+        speedtest.build_user_agent()
+
+        print('Getting speedtest.net Configuration')
+        try:
+            self.speedtest = speedtest.Speedtest()
+        except speedtest.ConfigRetrievalError:
+            print('ERROR: Failed to get speedtest.net configuration.  Aborting')
+            sys.exit(1)
+
+        print('Changing server to: {}'.format(server))
+        self.test_server = []
+        self.test_server.append(server)
+
+        try:
+            self.speedtest.get_servers(self.test_server)
+        except speedtest.NoMatchedServers:
+            print('ERROR: No matched servers: {}'.format(server))
+            sys.exit(1)
+        except speedtest.ServersRetrievalError:
+            print('ERROR: Cannot retrieve speedtest server list')
+            sys.exit(1)
+        except speedtest.InvalidServerIDType:
+            print('{} is an invalid server type, must be int'.format(server))
+            sys.exit(1)
+
+        print('Picking the closest server')
+        self.speedtest.get_best_server()
+
+        self.results = self.speedtest.results
+
+
     def send_results(self):
 
         result_dict = self.results.dict()
@@ -105,7 +143,7 @@ class InfluxdbSpeedtest():
                     'ping': result_dict['server']['latency']
                 },
                 'tags': {
-                    'server': result_dict['server']['sponsor']
+                    'server': result_dict['server']['id']+'-'+result_dict['server']['sponsor']
                 }
             }
         ]
@@ -113,17 +151,21 @@ class InfluxdbSpeedtest():
         if self.output:
             print('Download: {}'.format(str(result_dict['download'])))
             print('Upload: {}'.format(str(result_dict['upload'])))
-
         self.write_influx_data(input_points)
 
     def run(self):
 
         while True:
 
-            self.speedtest.download()
-            self.speedtest.upload()
+            server = ''
+            for server in self.serverlist:
+                print ('Server is %s' % server)
+                self.change_speedtest_server(server)
 
-            self.send_results()
+                self.speedtest.download()
+                self.speedtest.upload()
+
+                self.send_results()
 
             time.sleep(self.config.delay)
 
@@ -161,6 +203,8 @@ def main():
     parser = argparse.ArgumentParser(description="A tool to send Plex statistics to InfluxDB")
     parser.add_argument('--config', default='config.ini', dest='config', help='Specify a custom location for the config file')
     args = parser.parse_args()
+
+
     collector = InfluxdbSpeedtest(config=args.config)
     collector.run()
 
