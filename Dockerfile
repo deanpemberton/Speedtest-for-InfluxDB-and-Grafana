@@ -6,4 +6,4 @@ WORKDIR /src
 
 RUN pip install -r requirements.txt
 
-CMD ["python", "/src/InfluxdbSpeedtest.py"]
+CMD ["python", "/src/InfluxdbSpeedtest.py", " --config /config/config.ini"]
