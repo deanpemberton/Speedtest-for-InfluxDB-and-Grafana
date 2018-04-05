@@ -8,6 +8,7 @@ import speedtest
 import time
 import json
 
+
 class configManager():
 
     def __init__(self, config):
@@ -45,8 +46,7 @@ class configManager():
             self.test_server.append(test_server)
 
         # Servers
-        self.serverlist =  json.loads(self.config['SERVERLIST'].get('servers'))
-
+        self.serverlist = json.loads(self.config['SERVERLIST'].get('servers'))
 
 
 class InfluxdbSpeedtest():
@@ -203,7 +203,6 @@ def main():
     parser = argparse.ArgumentParser(description="A tool to send Plex statistics to InfluxDB")
     parser.add_argument('--config', default='config.ini', dest='config', help='Specify a custom location for the config file')
     args = parser.parse_args()
-
 
     collector = InfluxdbSpeedtest(config=args.config)
     collector.run()
